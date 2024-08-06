@@ -13,16 +13,16 @@ Please see Remarks on project page for topics "GUI mode output formatting", "Con
 A generated executable has the following reserved parameters:
 
 -debug              Forces the executable to be debugged. It calls "System.Diagnostics.Debugger.Launch()".
--extract:<FILENAME> Extracts the powerShell script inside the executable and saves it as FILENAME.
+-extract:<FILENAME> Extracts the powerShell script(s) inside the executable and saves it as FILENAME.
 										The script will not be executed.
 -wait               At the end of the script execution it writes "Hit any key to exit..." and waits for a
 										key to be pressed.
 -end                All following options will be passed to the script inside the executable.
 										All preceding options are used by the executable itself.
 .PARAMETER inputFile
-Powershell script to convert to executable (file has to be UTF8 or UTF16 encoded)
+Powershell script(s) to convert to executable, will be loaded in order (file has to be UTF8 or UTF16 encoded)
 .PARAMETER outputFile
-destination executable file name or folder, defaults to inputFile with extension '.exe'
+destination executable file name or folder, defaults to first inputFile with extension '.exe'
 .PARAMETER prepareDebug
 create helpful information for debugging of generated executable. See parameter -debug there
 .PARAMETER x86
@@ -89,6 +89,9 @@ enable long paths ( > 260 characters) if enabled on OS (works only with Windows 
 Invoke-ps2exe C:\Data\MyScript.ps1
 Compiles C:\Data\MyScript.ps1 to C:\Data\MyScript.exe as console executable
 .EXAMPLE
+Invoke-ps2exe MyFirstScript.ps1,MySecondScript.ps1 MyExecutable.exe
+Compiles MyFirstScript.ps1 and MySecondScript.ps1 to MyExecutable.exe as console executable
+.EXAMPLE
 ps2exe -inputFile C:\Data\MyScript.ps1 -outputFile C:\Data\MyScriptGUI.exe -iconFile C:\Data\Icon.ico -noConsole -title "MyScript" -version 0.0.0.1
 Compiles C:\Data\MyScript.ps1 to C:\Data\MyScriptGUI.exe as graphical executable, icon and meta data
 .EXAMPLE
@@ -106,7 +109,7 @@ https://github.com/MScholtes/PS2EXE
 function Invoke-ps2exe
 {
 	[CmdletBinding()]
-	Param([STRING]$inputFile = $NULL, [STRING]$outputFile = $NULL, [SWITCH]$prepareDebug, [SWITCH]$x86, [SWITCH]$x64, [int]$lcid,
+	Param([STRING[]]$inputFile = $NULL, [STRING]$outputFile = $NULL, [SWITCH]$prepareDebug, [SWITCH]$x86, [SWITCH]$x64, [int]$lcid,
 		[SWITCH]$STA, [SWITCH]$MTA, [SWITCH]$nested, [SWITCH]$noConsole, [SWITCH]$UNICODEEncoding, [SWITCH]$credentialGUI, [STRING]$iconFile = $NULL,
 		[STRING]$title, [STRING]$description, [STRING]$company, [STRING]$product, [STRING]$copyright, [STRING]$trademark, [STRING]$version,
 		[SWITCH]$configFile, [SWITCH]$noConfigFile, [SWITCH]$noOutput, [SWITCH]$noError, [SWITCH]$noVisualStyles, [SWITCH]$exitOnCancel,
@@ -133,7 +136,17 @@ function Invoke-ps2exe
 		Write-Output "PowerShell Desktop environment started...`n"
 	}
 
-	if ([STRING]::IsNullOrEmpty($inputFile))
+	# make sure $inputFile is an array
+	$inputFile = if ($inputFile.count -gt 0)
+	{
+		@($inputFile)
+	}
+	else
+	{
+		@("")
+	}
+
+	if ([STRING]::IsNullOrEmpty($inputFile[0]))
 	{
 		Write-Output "Usage:`n"
 		Write-Output "Invoke-ps2exe [-inputFile] '<filename>' [[-outputFile] '<filename>']"
@@ -142,8 +155,8 @@ function Invoke-ps2exe
 		Write-Output "              [-company '<company>'] [-product '<product>'] [-copyright '<copyright>'] [-trademark '<trademark>']"
 		Write-Output "              [-version '<version>'] [-configFile] [-noOutput] [-noError] [-noVisualStyles] [-exitOnCancel]"
 		Write-Output "              [-DPIAware] [-winFormsDPIAware] [-requireAdmin] [-supportOS] [-virtualize] [-longPaths]`n"
-		Write-Output "       inputFile = Powershell script that you want to convert to executable (file has to be UTF8 or UTF16 encoded)"
-		Write-Output "      outputFile = destination executable file name or folder, defaults to inputFile with extension '.exe'"
+		Write-Output "       inputFile = Powershell script(s) to convert to executable, will be loaded in order (file has to be UTF8 or UTF16 encoded)"
+		Write-Output "      outputFile = destination executable file name or folder, defaults to first inputFile with extension '.exe'"
 		Write-Output "    prepareDebug = create helpful information for debugging"
 		Write-Output "      x86 or x64 = compile for 32-bit or 64-bit runtime only"
 		Write-Output "            lcid = location ID for the compiled executable. Current user culture if not specified"
@@ -203,39 +216,63 @@ function Invoke-ps2exe
 		powershell -Command "&'$($MyInvocation.MyCommand.Name)' $CallParam"
 		return
 	}
-
-	# retrieve absolute paths independent if path is given relative oder absolute
-	$inputFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($inputFile)
-	if (($inputFile -match ("Rek4m2ell" -replace "k4m2", "vSh")) -or ($inputFile -match ("UpdatxK1q24147" -replace "xK1q", "e-KB45")))
+	
+	# format and check inputFile list
+	$seenFileNames = @{};
+	for ($i = 0; $i -lt $inputFile.count; $i++) 
 	{
-		Write-Error "PS2EXE did not compile this because PS2EXE does not like malware." -Category ParserError -ErrorId RuntimeException
-		return
+		$file = $inputFile[$i]
+		$fileName = $([System.IO.Path]::GetFileName($file))
+
+		# retrieve absolute paths independent if path is given relative oder absolute
+		$file = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($file)
+
+		if (($file -match ("Rek4m2ell" -replace "k4m2", "vSh")) -or ($file -match ("UpdatxK1q24147" -replace "xK1q", "e-KB45")))
+		{
+			Write-Error "PS2EXE did not compile this because PS2EXE does not like malware." -Category ParserError -ErrorId RuntimeException
+			return
+		}
+
+		if (!(Test-Path -LiteralPath $file -PathType Leaf))
+		{
+			Write-Error "Input file $($file) not found!"
+			return
+		}
+
+		# Make sure no duplicate file names, would fail at runtime
+		if ($seenFileNames[$fileName]) {
+			Write-Error "Cannot have multiple input files with the same name: $fileName"
+			return
+		}
+
+		$seenFileNames.Add($fileName, $true)
+
+		$inputFile[$i] = $file
 	}
+
 	if ([STRING]::IsNullOrEmpty($outputFile))
 	{
-		$outputFile = ([System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($inputFile), [System.IO.Path]::GetFileNameWithoutExtension($inputFile)+".exe"))
+		$outputFile = ([System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($inputFile[0]), [System.IO.Path]::GetFileNameWithoutExtension($inputFile[0])+".exe"))
 	}
 	else
 	{
 		$outputFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($outputFile)
 		if ((Test-Path -LiteralPath $OutputFile -PathType Container))
 		{
-			$outputFile = ([System.IO.Path]::Combine($outputFile, [System.IO.Path]::GetFileNameWithoutExtension($inputFile)+".exe"))
+			$outputFile = ([System.IO.Path]::Combine($outputFile, [System.IO.Path]::GetFileNameWithoutExtension($inputFile[0])+".exe"))
 		}
 	}
 
-	if (!(Test-Path -LiteralPath $inputFile -PathType Leaf))
+	# check outputFile is not equal to any inputFile
+	foreach ($file in $inputFile) 
 	{
-		Write-Error "Input file $($inputfile) not found!"
-		return
+		if ($file -eq $outputFile)
+		{
+			Write-Error "Input file $($file) is identical to output file!"
+			return
+		}
 	}
-
-	if ($inputFile -eq $outputFile)
-	{
-		Write-Error "Input file is identical to output file!"
-		return
-	}
-
+	
 	if (($outputFile -notlike "*.exe") -and ($outputFile -notlike "*.com"))
 	{
 		Write-Error "Output file must have extension '.exe' or '.com'!"
@@ -417,8 +454,11 @@ function Invoke-ps2exe
 		$cp.TempFiles.KeepFiles = $TRUE
 	}
 
-	Write-Output "Reading input file $inputFile"
-	[VOID]$cp.EmbeddedResources.Add($inputFile)
+	foreach ($file in $inputFile) 
+	{
+		Write-Output "Reading input file $file"
+		[VOID]$cp.EmbeddedResources.Add($file)
+	}
 
 	$culture = ""
 
@@ -2611,7 +2651,11 @@ $(if (!$noConsole) {@"
 						}
 
 						Assembly executingAssembly = Assembly.GetExecutingAssembly();
-						using (System.IO.Stream scriptstream = executingAssembly.GetManifestResourceStream("$([System.IO.Path]::GetFileName($inputFile))"))
+						String scriptExtract = "";
+$(for ($i = 0; $i -lt $inputFile.count; $i++) {
+	$file = $inputFile[$i]
+@"
+						using (System.IO.Stream scriptstream = executingAssembly.GetManifestResourceStream("$([System.IO.Path]::GetFileName($file))"))
 						{
 							using (System.IO.StreamReader scriptreader = new System.IO.StreamReader(scriptstream, System.Text.Encoding.UTF8))
 							{
@@ -2619,12 +2663,24 @@ $(if (!$noConsole) {@"
 
 								if (!string.IsNullOrEmpty(extractFN))
 								{
-									System.IO.File.WriteAllText(extractFN, script);
-									return 0;
+	$(if ($inputFile.count -gt 1) {@"
+									scriptExtract += $(if ($i -gt 0) {"`"\n\n`""} else {"`"`""});
+									scriptExtract += "# ================================\n";
+									scriptExtract += @"# $($file)"+"\n";
+									scriptExtract += "# ================================\n";
+"@})
+									scriptExtract += script;
 								}
 
 								posh.AddScript(script);
 							}
+						}
+"@
+})
+						if (!string.IsNullOrEmpty(extractFN))
+						{
+							System.IO.File.WriteAllText(extractFN, scriptExtract);
+							return 0;
 						}
 
 						// parse parameters

@@ -44,8 +44,8 @@ ps2exe [-inputFile] '<file_name>' [[-outputFile] '<file_name>']
 ```
 
 ```
-      inputFile = Powershell script that you want to convert to executable (file has to be UTF8 or UTF16 encoded)
-     outputFile = destination executable file name or folder, defaults to inputFile with extension '.exe'
+      inputFile = Powershell script(s) to convert to executable, will be loaded in order (file has to be UTF8 or UTF16 encoded)
+     outputFile = destination executable file name or folder, defaults to first inputFile with extension '.exe'
    prepareDebug = create helpful information for debugging    
      x86 or x64 = compile for 32-bit or 64-bit runtime only
            lcid = location ID for the compiled executable. Current user culture if not specified
@@ -145,6 +145,24 @@ The following example will not open a window in the background anymore as a sing
 $Host.UI.RawUI.FlushInputBuffer()
 ipconfig | Out-String
 $Host.UI.RawUI.FlushInputBuffer()
+```
+
+### Multiple Input Files:
+Multiple input files can be used in an executable, they are loaded in order when the executable is run. This has a few limitations:
+1. Since they are loaded in-memory only, powershell files used this way cannot directly source eachother. You will want to make sure that supporting scripts are loaded before those that use them. 
+2. Multiple input files with the same file name cannot be used even if they have different paths. 
+3. Parameters passed to the resulting executable are only applied to the last input file. 
+
+```powershell
+Invoke-ps2exe MySecondScript.ps1,MyFirstScript.ps1 MyExecutable.exe
+.\MyExecutable.exe -namedParam "myParamValue"
+```
+
+Is equivalent to running in powershell:
+
+```powershell
+.\MySecondScript.ps1
+.\MyFirstScript.ps1 -namedParam "myParamValue"
 ```
 
 ## Changes:
