@@ -1,22 +1,22 @@
 # PS2EXE
-Overworking of the great script of Ingo Karstein with GUI support. The GUI output and input is activated with one switch, real windows executables are generated. With Powershell 5.x support and graphical front end.
+Overworking of the great script of Ingo Karstein with GUI support. The GUI output and input is activated with one switch, real windows executables are generated. Compiles only with and to Powershell 5.x. With optional graphical front end Win-PS2EXE.
 
 Module version.
 
-You find the script based version here (https://github.com/MScholtes/TechNet-Gallery) and here: [PS2EXE-GUI: "Convert" PowerShell Scripts to EXE Files with GUI](https://gallery.technet.microsoft.com/PS2EXE-GUI-Convert-e7cb69d5).
+You find the script based version here (https://github.com/MScholtes/TechNet-Gallery).
 
 Author: Markus Scholtes
 
-Version: 1.0.13
+Version: 1.0.14
 
-Date: 2023-09-26
+Date: 2024-09-15
 
 ## Installation
 
 ```powershell
 PS C:\> Install-Module ps2exe
 ```
-(on Powershell V4 you may have to install PowershellGet before) or download from here: https://www.powershellgallery.com/packages/ps2exe/.
+or download from here: https://www.powershellgallery.com/packages/ps2exe/.
 
 ## Usage
 ```powershell
@@ -76,6 +76,8 @@ UNICODEEncoding = encode output as UNICODE in console mode
 A generated executable has the following reserved parameters:
 
 ```
+-? [<MODIFIER>]     Powershell help text of the script inside the executable. The optional parameter combination
+                    "-? -detailed", "-? -examples" or "-? -full" can be used to get the appropriate help text.
 -debug              Forces the executable to be debugged. It calls "System.Diagnostics.Debugger.Launch()".
 -extract:<FILENAME> Extracts the powerShell script inside the executable and saves it as FILENAME.
                     The script will not be executed.
@@ -86,17 +88,6 @@ A generated executable has the following reserved parameters:
 
 
 ## Remarks
-
-### Powershell Core:
-Since *Powershell Core* does not include a compiler, *PS2EXE* does not work in *Powershell Core*. If you install the *PS2EXE* module in the underlying *Windows Powershell* you are able to call *PS2EXE* directly from *Powershell Core*. You might do this the following way (here executed in a *Powershell Core* session):
-```powershell
-powershell
-Install-Module ps2exe
-exit
-```
-Beginning with the next start of *Powershell Core* you can just call *ps2exe*, *ps2exe.ps1* or *Invoke-PS2EXE* to execute *PS2EXE* (you can add further parameters to *Install-Module* accoding to your requirements).
-
-But remember, you can only compile scripts that are compatible to *Powershell 5*!
 
 ### List of cmdlets not implemented:
 The basic input/output commands had to be rewritten in C# for PS2EXE. Not implemented are *Write-Progress* in console mode (too much work) and *Start-Transcript*/*Stop-Transcript* (no proper reference implementation by Microsoft).
@@ -166,6 +157,10 @@ Is equivalent to running in powershell:
 ```
 
 ## Changes:
+### 1.0.14 / 2024-09-15
+- new parameter -? for compiled executables to show the help of the original Powershell script
+- in GUI mode window titles are the application title (when set compiling with parameter -title)
+
 ### 1.0.13 / 2023-09-26
 - now [ and ] are supported in directory name of script
 - source file might be larger than 16 MB (for whoever that needs)
